@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+    <node name="underwater_serial_node" pkg="serial_communication" type="underwater_serial_node.py" output="screen">
+        <!-- 串口设备路径 -->
+        <param name="port" type="string" value="/dev/stm32" />
+        
+        <!-- 波特率 -->
+        <param name="baudrate" type="int" value="9600" />
+        
+        <!-- 超时时间(秒) -->
+        <param name="timeout" type="double" value="0.5" />
+    </node>
+</launch>
