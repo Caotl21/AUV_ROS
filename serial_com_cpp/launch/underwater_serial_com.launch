@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- 串口通信节点 -->
+    <node name="underwater_serial_node" pkg="serial_com_cpp" type="underwater_serial_node" output="screen">
+        <!-- 串口设备路径 -->
+        <param name="port" type="string" value="/dev/stm32" />
+        
+        <!-- 波特率 -->
+        <param name="baudrate" type="int" value="9600" />
+        
+        <!-- 超时时间(毫秒) -->
+        <param name="timeout" type="int" value="500" />
+        
+        <!-- 设置环境变量 -->
+        <env name="LANG" value="en_US.UTF-8"/>
+        <env name="LC_ALL" value="en_US.UTF-8"/>
+        <env name="LC_CTYPE" value="en_US.UTF-8"/>
+    </node>
+</launch>

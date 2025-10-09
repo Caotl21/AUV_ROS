@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+    <node name="serial_communication_node" pkg="serial_communication" type="serial_com_node.py" output="screen">
+        <!-- 串口设备路径，默认为 /dev/ttyUSB0 -->
+        <param name="port" type="string" value="/dev/stm32" />
+        
+        <!-- 波特率，默认为 9600 -->
+        <param name="baudrate" type="int" value="9600" />
+        
+        <!-- 发送模式：dec(十进制) 或 hex(十六进制)，默认为 dec -->
+        <param name="mode" type="string" value="hex" />
+    </node>
+</launch>

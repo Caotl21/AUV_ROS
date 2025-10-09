@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- 串口通信节点 -->
+    <include file="$(find serial_com_cpp)/launch/serial_com.launch" />
+    
+    <!-- 键盘测试节点 -->
+    <node name="keyboard_test_node" pkg="serial_com_cpp" type="keyboard_test_node" output="screen" />
+</launch>

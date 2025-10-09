@@ -1,0 +1,16 @@
+Header header
+int16 accel_x
+int16 accel_y
+int16 accel_z
+int16 gyro_x
+int16 gyro_y
+int16 gyro_z
+int16 mag_x
+int16 mag_y
+int16 mag_z
+int16 angle_x
+int16 angle_y
+int16 angle_z
+int16 depth
+int16 temperature
+int16 humidity

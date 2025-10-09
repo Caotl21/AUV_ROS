@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- 串口通信节点 -->
+    <node name="serial_com_node" pkg="serial_com_cpp" type="serial_com_node" output="screen">
+        <!-- 串口设备路径 -->
+        <param name="port" type="string" value="/dev/stm32" />
+        
+        <!-- 波特率 -->
+        <param name="baudrate" type="int" value="9600" />
+        
+        <!-- 超时时间(毫秒) -->
+        <param name="timeout" type="int" value="500" />
+        
+        <!-- 数据模式: dec(十进制) 或 hex(十六进制) -->
+        <param name="mode" type="string" value="hex" />
+    </node>
+</launch>
