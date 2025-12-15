@@ -1,0 +1,13 @@
+#机器人名称及其对应IP
+bluerov2: 
+ ip: "192.168.1.1" 
+ pattern: "sim"
+robot1: 
+  ip: "192.168.1.101"
+  pattern: "real"
+robot2: 
+  ip: "192.168.1.102"
+  pattern: "real"
+robot3: 
+  ip: "192.168.1.103"
+  pattern: "real"
