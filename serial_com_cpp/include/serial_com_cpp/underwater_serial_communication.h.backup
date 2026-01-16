@@ -3,12 +3,6 @@
 
 #include <ros/ros.h>
 #include <serial/serial.h>
-#include <sensor_msgs/Imu.h>
-#include <sensor_msgs/FluidPressure.h>
-#include <sensor_msgs/JointState.h>
-#include <underwater_msgs/BatteryState.h>
-#include <underwater_msgs/EnvState.h>
-#include <std_msgs/Float32MultiArray.h>
 #include <underwater_msgs/ThrustersPWM.h>
 #include <underwater_msgs/SensorData.h>
 #include <underwater_msgs/SensorDataFast.h>
@@ -48,12 +42,8 @@ private:
     ros::Subscriber servo_sub_;
     ros::Subscriber light_sub_;
     ros::Publisher sensor_pub_;
-    ros::Publisher imu1_pub_;
-    ros::Publisher imu2_pub_;
-    ros::Publisher env_state_pub_;
-    ros::Publisher depth_pub_;
-    ros::Publisher battery_pub_;
-
+    ros::Publisher sensor_fast_pub_;
+    ros::Publisher sensor_slow_pub_;
 
     
     // 串口相关
@@ -106,8 +96,8 @@ private:
     void processSensorSlowData(uint8_t length, const std::vector<uint8_t>& payload);
     
     // ROS回调
-    void thrusterCallback(const sensor_msgs::JointState::ConstPtr& msg);
-    void servoCallback(const sensor_msgs::JointState::ConstPtr& msg);
+    void thrusterCallback(const underwater_msgs::ThrustersPWM::ConstPtr& msg);
+    void servoCallback(const underwater_msgs::ServoPWM::ConstPtr& msg);
     void lightCallback(const underwater_msgs::LightPWM::ConstPtr& msg);
 };
 

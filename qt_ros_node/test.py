@@ -32,13 +32,15 @@ from ros_numpy.image import image_to_numpy, numpy_to_image
 from ros_numpy.point_cloud2 import pointcloud2_to_array
 from geometry_msgs.msg import Twist, Vector3
 from rosgraph_msgs.msg import Log
+from underwater_msgs.msg import EnvState, BatteryState
 
 from dashboard import CompassWidget, ArtificialHorizonWidget
 from thruster import RobotHUDWidget
 
 # --- 图片路径 ---
-LOGO_IMAGE_PATH = "/home/caotl21/work/PYQT/qt_ros/my_example/logo/test_transparent_pil.png"  # 请确保图片在当前目录下
-SCREENSHOT_PATH = "/home/caotl21/work/PYQT/qt_ros/my_example/screenshot/"  # 截图保存路径
+LOGO_IMAGE_PATH = "./logo/test_transparent_pil.png"  # 请确保图片在当前目录下
+SCREENSHOT_PATH = "./screenshot/"  # 截图保存路径
+VIDEO_PATH = "./video/"          # 视频保存路径
 # --- 配色方案 (参考您的UI图) ---
 COLOR_BG = QColor(30, 30, 35)           # 仪表盘深色背景
 COLOR_RING = QColor(60, 60, 70)         # 仪表盘外圈
@@ -195,10 +197,10 @@ class RosNode(QThread):
     imu1_arrive_signal = pyqtSignal()
     imu2_arrive_signal = pyqtSignal()
     thruster_arrive_signal = pyqtSignal()
-    env_param_arrive_signal = pyqtSignal()
+    env_param_arrive_signal = pyqtSignal(float, float, float)
     depth_arrive_signal = pyqtSignal(float)
     force_toque_arrive_signal = pyqtSignal()
-    battery_state_arrive_signal = pyqtSignal()
+    battery_state_arrive_signal = pyqtSignal(float,float)
     connection_time_signal = pyqtSignal(str)
 
     def __init__(self):
@@ -213,6 +215,7 @@ class RosNode(QThread):
         self.robot_namespace = ''  # 默认机器人命名空间
         
         self.simulation_publisher = None
+        self.servo_publihser = None
         self.simulation_subscriber = None
         self.image_subscriber = None
         self.imu1_subscriber = None
@@ -229,6 +232,10 @@ class RosNode(QThread):
         self.pitch = 0.0
         self.yaw = 0.0
         self.is_connected = False # 连接状态标志
+        
+        #云台相关
+        self.servo_1_value = 0
+        self.servo_2_value = 90
 
         self.connection_start_time = None
         self.connection_timer = None
@@ -271,17 +278,19 @@ class RosNode(QThread):
         # 取消之前的订阅
         self.cancel_topics_subscriber()
         
-        # 创建新的发布者和订阅者
+        # 创建新的订阅者
         self.simulation_publisher = rospy.Publisher(f'/{robot_namespace}/cmd_vel', Twist, queue_size=1)
+        self.servo_publihser = rospy.Publisher(f'/{robot_namespace}/servo_states', JointState, queue_size=1)
+        # 创建新的订阅者
         self.simulation_subscriber = rospy.Subscriber(f'/{robot_namespace}/cmd_vel', Twist, callback=self.callback, queue_size=1)
         self.image_subscriber = rospy.Subscriber(f'/{robot_namespace}/camera/image_color', Image_msg, callback=self.image_callback, queue_size=1)
         self.imu1_subscriber = rospy.Subscriber(f'/{robot_namespace}/imu1', Imu, callback=self.imu1_callback, queue_size=10)
         self.imu2_subscriber = rospy.Subscriber(f'/{robot_namespace}/imu2', Imu, callback=self.imu2_callback, queue_size=10)
         self.thruster_subscriber = rospy.Subscriber(f'/{robot_namespace}/thruster_states', JointState, callback=self.thruster_callback, queue_size=1)
-        self.env_state_subscriber = rospy.Subscriber(f'/{robot_namespace}/environment_state', Float32MultiArray, callback=self.env_callback, queue_size=1)
+        self.env_state_subscriber = rospy.Subscriber(f'/{robot_namespace}/environment_state', EnvState, callback=self.env_callback, queue_size=1)
         self.depth_subscriber = rospy.Subscriber(f'/{robot_namespace}/pressure', press, callback=self.depth_callback, queue_size=1)
         self.force_toque_subscriber = rospy.Subscriber(f'/{robot_namespace}/force_torque', Float32MultiArray, callback=self.force_toque_callback, queue_size=1)
-        self.battery_state_subscriber = rospy.Subscriber(f'/{robot_namespace}/battery_state', Float32MultiArray, callback=self.battery_state_callback, queue_size=1)
+        self.battery_state_subscriber = rospy.Subscriber(f'/{robot_namespace}/battery_state', BatteryState, callback=self.battery_state_callback, queue_size=1)
 
         # 将下述日志同步发布到ROS日志系统中
         logger.info(f"连接成功：{robot_namespace}")
@@ -351,14 +360,18 @@ class RosNode(QThread):
 
     def battery_state_callback(self, msg):
         """处理电池状态数据"""
+        voltage = msg.voltage
+        current = msg.current
+        self.battery_state_arrive_signal.emit(voltage,current)
+        rospy.loginfo(f"电池状态更新: Voltage={voltage:.2f} V, Current={current:.2f} A")
         # 这里假设msg是Float32MultiArray类型
-        if len(msg.data) >= 2:
-            voltage = msg.data[0]  # 电压
-            current = msg.data[1]  # 电流
-            self.battery_state_arrive_signal.emit()
-            rospy.loginfo(f"电池状态更新: Voltage={voltage:.2f} V, Current={current:.2f} A")
-        else:
-            rospy.logwarn("接收到的电池状态数据格式不正确")
+        # if len(msg.data) >= 2:
+        #     voltage = msg.data[0]  # 电压
+        #     current = msg.data[1]  # 电流
+        #     self.battery_state_arrive_signal.emit()
+        #     rospy.loginfo(f"电池状态更新: Voltage={voltage:.2f} V, Current={current:.2f} A")
+        # else:
+        #     rospy.logwarn("接收到的电池状态数据格式不正确")
 
     def force_toque_callback(self, msg):
         """处理力/力矩数据"""
@@ -372,8 +385,8 @@ class RosNode(QThread):
         self.depth_arrive_signal.emit(current_pressure)
 
     def env_callback(self, msg):
-        self.env_state = msg.data
-        self.env_param_arrive_signal.emit()
+        self.env_state = msg
+        self.env_param_arrive_signal.emit(self.env_state.water_temp, self.env_state.internal_temp, self.env_state.internal_humidity)#水温，内温，内湿度
     
     def thruster_callback(self, msg):
         thrust_values = []
@@ -381,10 +394,10 @@ class RosNode(QThread):
             try:
                 index = msg.name.index(f'thruster_{i+1}_joint')
                 thrust = msg.effort[index]
+                thrust = (thrust - 1500.0) / 400.0 # 1100-1900, 转换为 -1 到 1
                 thrust_values.append(thrust)
             except ValueError:
                 thrust_values.append(0.0)
-        
         self.thruster_values = thrust_values
         self.thruster_arrive_signal.emit()
     
@@ -394,7 +407,7 @@ class RosNode(QThread):
         r = SciRotation.from_quat([orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
         self.roll, self.pitch, self.yaw = r.as_euler('xyz', degrees=True)
         # 根据线性加速度计算加速度大小：平方和开根号
-        self.acceleration = (msg.linear_acceleration.x**2 + msg.linear_acceleration.y**2 + msg.linear_acceleration.z**2)**0.5
+        self.acceleration = (msg.linear_acceleration.x**2 + msg.linear_acceleration.y**2 + msg.linear_acceleration.z**2)#**0.5
         # 根据角速度计算角速度大小：平方和开根号
         self.angular_velocity = (msg.angular_velocity.x**2 + msg.angular_velocity.y**2 + msg.angular_velocity.z**2)**0.5
         #rospy.loginfo(f"IMU数据到达: Roll={self.roll:.2f}, Pitch={self.pitch:.2f}, Yaw={self.yaw:.2f}")
@@ -415,6 +428,16 @@ class RosNode(QThread):
     def callback(self, msg):
         self.msg = msg
         self.data_arrive_signal.emit()
+
+    def publish_target_servo_angle(self):
+        if not self.is_connected:
+            logger.warning("请先连接机器人!")
+            return
+        msg = JointState()
+        msg.effort = [0.0,0.0]
+        msg.effort[0] = self.servo_1_value
+        msg.effort[1] = self.servo_2_value
+        self.servo_publihser.publish(msg)
 
     def publish_twist_message(self):
         if not self.is_connected:
@@ -498,6 +521,24 @@ class Widget(QMainWindow):
         self.ros_node.start()
 
         self.is_sim = False
+        #视频录制相关
+        self.is_recording = False # 录制状态标志
+        self.video_writer = None
+        self.record_duration = 0 # 录制时长（秒）
+        self.record_timer = QTimer()
+        self.record_timer.timeout.connect(self.record_frame) #绑定定时抓帧函数
+        self.duration_timer = QTimer()
+        self.duration_timer.timeout.connect(self.update_recording_duration)
+
+        #电池相关
+        self.battery_100 = 4.2 *6  # 100%
+        self.battery_75 = 3.95 *6  # 75%
+        self.battery_50 = 3.85 *6  # 50%
+        self.battery_25 = 3.73 *6  # 25%
+        self.battery_5 = 3.5 *6  # 5%
+        self.battery_0 = 2.75 *6  # 0%
+
+
 
         # 设置仿真环境参数
         self.water_density_sim = 1031.0  # kg/m^3
@@ -954,14 +995,14 @@ class Widget(QMainWindow):
         self.angle_1_slider = QSlider(Qt.Horizontal)
         self.angle_1_slider.setMinimum(-90)
         self.angle_1_slider.setMaximum(90)
-        self.angle_1_slider.setValue(0)
+        self.angle_1_slider.setValue(0)#初始化的值得改self.ros_node.servo_1_value
         self.angle_1_slider.setTickPosition(QSlider.TicksBelow)
         self.angle_1_slider.setTickInterval(30)
 
         self.angle_2_slider = QSlider(Qt.Horizontal)
         self.angle_2_slider.setMinimum(0)
         self.angle_2_slider.setMaximum(180)
-        self.angle_2_slider.setValue(90)
+        self.angle_2_slider.setValue(90)#初始化的self.ros_node.servo_2_value也得改
         self.angle_2_slider.setEnabled(True)
         self.angle_2_slider.setTickPosition(QSlider.TicksBelow)  # 显示刻度
         self.angle_2_slider.setTickInterval(10)  #刻度间隔
@@ -1089,7 +1130,9 @@ class Widget(QMainWindow):
         self.log_text_edit = QTextEdit()
         self.log_text_edit.setReadOnly(True)
         self.log_text_edit.setMinimumHeight(150)
-        self.log_text_edit.setStyleSheet("border: 3px solid #BDC3C7; font-family: monospace; font-size: 10pt;")
+        # self.log_text_edit.setStyleSheet("border: 3px solid #BDC3C7; font-family: monospace; font-size: 10pt; ")
+        self.log_text_edit.setStyleSheet(" solid #BDC3C7; font-family: monospace; font-size: 10pt; ")
+        # self.log_text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         bottom_layout.addWidget(self.log_text_edit)
 
         return bottom_bar
@@ -1101,7 +1144,7 @@ class Widget(QMainWindow):
         
         self.connect_button.clicked.connect(self.connect_to_robot)
         self.btn_take_photo.clicked.connect(self.take_photo)
-        #self.btn_start_recording.clicked.connect(self.start_recording)
+        self.btn_start_recording.clicked.connect(self.toggle_recording)
         #self.btn_estop.clicked.connect(self.emergency_stop)
 
         self.ros_node.image_arrive_signal.connect(self.show_image)
@@ -1114,10 +1157,15 @@ class Widget(QMainWindow):
         self.ros_node.depth_arrive_signal.connect(self.update_depth_display)
         self.ros_node.force_toque_arrive_signal.connect(self.update_force_torque_display)
         self.ros_node.connection_time_signal.connect(self.update_connection_time_display)
+        self.ros_node.battery_state_arrive_signal.connect(self.update_battery_display)
 
         # 云台滑块
         self.angle_1_slider.valueChanged.connect(lambda v: self.angle_1_value.setText(f"{v}°"))
         self.angle_2_slider.valueChanged.connect(lambda v: self.angle_2_value.setText(f"{v}°"))
+        self.angle_1_slider.sliderReleased.connect(self.mannul_servo_angle_changed)#注意不是调用函数而是函数引用
+        self.angle_2_slider.sliderReleased.connect(self.mannul_servo_angle_changed)
+        # self.angle_1_slider.valueChanged.connect(self.mannul_servo_angle_changed)
+        # self.angle_2_slider.valueChanged.connect(self.mannul_servo_angle_changed)
 
     def connect_to_robot(self):
         """连接到选定的机器人"""
@@ -1181,35 +1229,81 @@ class Widget(QMainWindow):
         self.lbl_torque_y.setText(f"{torques[1]:.2f}")
         self.lbl_torque_z.setText(f"{torques[2]:.2f}")
     
-    def update_env_display(self, env_data):
+    def update_env_display(self, water_temp, internal_temp, internal_humidity):
         """更新环境参数显示"""
-        self.lbl_temp_water_pressure.setText(f"{self.ros_node.current_pressure:.1f}")
-        self.lbl_temp_water.setText(f"{env_data['water_temp']:.1f}")
-        self.lbl_temp_internal.setText(f"{env_data['internal_temp']:.1f}")
-        self.lbl_humi_internal.setText(f"{env_data['internal_humidity']:.1f}")
+        self.lbl_temp_water.setText(f"{water_temp:.1f}")
+        self.lbl_temp_internal.setText(f"{internal_temp:.1f}")
+        self.lbl_humi_internal.setText(f"{internal_humidity:.1f}")
 
-    def update_depth_display(self, curent_pressure):
+    def update_battery_display(self, voltage, current):
+        """更新电池状态显示"""
+        percent = self.battery_progress_compute(voltage)
+        self.lbl_voltage.setText(f"{voltage:.2f}V")
+        self.lbl_current.setText(f"{current:.2f}A")
+        self.battery_progress.setValue(percent)
+
+    def battery_progress_compute(self, voltage):
+        """根据电压计算剩余电量百分比"""
+        # 判断电压处于哪个范围内
+        if self.battery_0 <= voltage < self.battery_5:
+            min_voltage = self.battery_0
+            max_voltage = self.battery_5
+            percent_base = 0    #基准值
+            percent_delta = 5   #区间增量
+        elif self.battery_5 <= voltage < self.battery_25:
+            min_voltage = self.battery_5
+            max_voltage = self.battery_25
+            percent_base = 5
+            percent_delta = 20
+        elif self.battery_25 <= voltage < self.battery_50:
+            min_voltage = self.battery_25
+            max_voltage = self.battery_50
+            percent_base = 25
+            percent_delta = 25
+        elif self.battery_50 <= voltage < self.battery_75:
+            min_voltage = self.battery_50
+            max_voltage = self.battery_75
+            percent_base = 50
+            percent_delta = 25
+        elif self.battery_75 <= voltage <= self.battery_100:
+            min_voltage = self.battery_75
+            max_voltage = self.battery_100
+            percent_base = 75
+            percent_delta = 25
+        if voltage < self.battery_0:
+            rospy.logerr(f"电池电压过低：{voltage:.2f}V")
+            return 0
+        elif voltage > self.battery_100:
+            rospy.logerr(f"电池电压不对：{voltage:.2f}V")
+            return 100
+        else:
+            return int((voltage - min_voltage) / (max_voltage - min_voltage)*percent_delta + percent_base)  #百分比计算
+
+    def update_depth_display(self, current_pressure):
         """更新深度计显示"""
         # === 计算公式 ===
         # 深度 = (当前压力 - 大气压) / (密度 * 重力)
         if self.is_sim:
-            current_depth = (curent_pressure - self.atmospheric_pressure_sim) / (self.water_density_sim * self.gravity)
+            current_depth = (current_pressure - self.atmospheric_pressure_sim) / (self.water_density_sim * self.gravity)
         else:
-            current_depth = (curent_pressure - self.atmospheric_pressure_real) / (self.water_density_real * self.gravity)
+            current_depth = (current_pressure - self.atmospheric_pressure_real) / (self.water_density_real * self.gravity)
         #rospy.loginfo(f"当前压力: {curent_pressure:.2f} Pa | 当前深度: {current_depth:.4f} m")
         self.lbl_depth_actual.setText(f"{current_depth:.3f}")
+        self.lbl_temp_water_pressure.setText(f"{current_pressure:.1f}")
         #self.lbl_depth_setpoint.setText(f"{setpoint_depth:.2f}")
 
-    def mannul_servo_angle_changed(self, value):
+    def mannul_servo_angle_changed(self):
         """当用户手动拖动滑块时触发"""
         #判断是哪个slider触发的
         sender = self.sender()
         if sender == self.angle_1_slider:
-            self.angle_1_value_label.setText(f"{value} °")
-            self.ros_node.publish_target_servo_angle(value, 1)
+            self.ros_node.servo_1_value = self.angle_1_slider.value()
+            # self.angle_1_value_label.setText(f"{value} °")
+            self.ros_node.publish_target_servo_angle()
         elif sender == self.angle_2_slider:
-            self.angle_2_value_label.setText(f"{value} °")
-            self.ros_node.publish_target_servo_angle(value, 2)
+            # self.angle_2_value_label.setText(f"{value} °")
+            self.ros_node.servo_2_value = self.angle_2_slider.value()
+            self.ros_node.publish_target_servo_angle()
 
     def take_photo(self):
         """将当前显示在 QLabel 上的图像保存为文件"""
@@ -1220,6 +1314,73 @@ class Widget(QMainWindow):
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         self.image_label.grab().save(f'{SCREENSHOT_PATH}/captured_image_{timestamp}.png', 'PNG')
         rospy.loginfo(f"图片已保存为 captured_image_{timestamp}.png")
+
+    def toggle_recording(self):
+        """开始或停止录像"""
+        if not self.is_recording:
+            self.start_recording()
+        else:
+            self.stop_recording()
+
+
+    def start_recording(self):
+        """开始或停止录像"""
+        if not self.ros_node.is_connected:
+            rospy.logwarn("请先连接到机器人！")
+            return
+        # 开始录像
+        #准备文件名和路径
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        video_filename = f'{VIDEO_PATH}/recorded_video_{timestamp}.avi'
+        #设置视频参数
+        width = self.image_label.width()
+        height = self.image_label.height()
+        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        #实例化 20是帧率
+        self.video_writer = cv2.VideoWriter(video_filename, fourcc, 20.0, (width, height))
+        if self.video_writer.isOpened():
+            self.is_recording = True
+            self.btn_start_recording.setText("⏹ 00:00")
+            self.record_timer.start(50)  # 每50毫秒写入一帧, 即20fps
+            self.duration_timer.start(1000)  # 每1秒更新一次录像时长显示
+            rospy.loginfo(f"🎬 开始录像，文件名: recorded_video_{timestamp}.avi")
+            
+    def update_recording_duration(self):
+        """更新录像时长显示"""
+        if self.is_recording:
+            self.record_duration += 1  # 每1秒增加1秒
+            minutes,seconds = divmod(self.record_duration, 60)
+            self.btn_start_recording.setText(f"⏹ {minutes:02d}:{seconds:02d}")
+
+    def record_frame(self):
+        """将当前显示在 QLabel 上的图像写入视频文件"""
+        if self.is_recording and self.video_writer:
+            # 获取QLabel上的图像
+            pixmap = self.image_label.grab()
+            image = pixmap.toImage().convertToFormat(4)  # QImage.Format_RGBA8888
+            #转换格式，将QImage转换为OpenCV格式(BGRA->BGR)
+            ptr = image.bits()
+            ptr.setsize(image.byteCount())
+            arr = np.array(ptr).reshape(image.height(), image.width(), 4)
+            #转为BGR并强制缩放到初始化时代尺寸
+            frame = cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
+            frame = cv2.resize(frame, (self.image_label.width(), self.image_label.height()))
+            #写入视频文件
+            self.video_writer.write(frame)
+
+    def stop_recording(self):
+        """停止录像"""
+        self.is_recording = False
+        self.record_timer.stop()
+        self.duration_timer.stop()
+        self.record_duration = 0
+
+        if self.video_writer:
+            self.video_writer.release()
+            self.video_writer = None
+        self.btn_start_recording.setText("🎬 开始录像")
+        rospy.loginfo("录像已保存")
+
 
     def show_image(self):
         """显示来自ROS图像话题的图像"""
@@ -1342,7 +1503,7 @@ class Widget(QMainWindow):
             self.log_text_edit.setTextColor(Qt.black)
 
         self.log_text_edit.insertPlainText(message)
-        # 自动滚动到底部
+        # # 自动滚动到底部
         self.log_text_edit.ensureCursorVisible()
 
 if __name__ == '__main__':

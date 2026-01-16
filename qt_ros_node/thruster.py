@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt, QRectF, QPointF, QTimer
 from PyQt5.QtGui import QPainter, QColor, QPen, QFont, QPixmap, QBrush, QLinearGradient
 
 # --- 配置文件 ---
-ROBOT_IMAGE_PATH = "/home/caotl21/work/PYQT/qt_ros/my_example/logo/robot_cv.png"  # 请确保图片在当前目录下
+ROBOT_IMAGE_PATH = "./logo/robot_cv.png"  # 请确保图片在当前目录下
 
 # 配色方案
 COLOR_TEXT = QColor("#1E1E1E")

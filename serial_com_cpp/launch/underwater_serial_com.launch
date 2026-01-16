@@ -1,19 +1,28 @@
 <?xml version="1.0"?>
+
 <launch>
+    <arg name="robot_name" default="robot1" />
+    <arg name="port" default="/dev/ttyUSB0" />
+    <arg name="baudrate" default="115200" />
+    <arg name="timeout" default="500" />
+
+<group ns="$(arg robot_name)">
     <!-- 串口通信节点 -->
     <node name="underwater_serial_node" pkg="serial_com_cpp" type="underwater_serial_node" output="screen">
         <!-- 串口设备路径 -->
-        <param name="port" type="string" value="/dev/stm32" />
+        <param name="port" type="string" value="$(arg port)" />
         
         <!-- 波特率 -->
-        <param name="baudrate" type="int" value="9600" />
+        <param name="baudrate" type="int" value="$(arg baudrate)" />
         
         <!-- 超时时间(毫秒) -->
-        <param name="timeout" type="int" value="500" />
+        <param name="timeout" type="int" value="$(arg timeout)" />
         
         <!-- 设置环境变量 -->
         <env name="LANG" value="en_US.UTF-8"/>
         <env name="LC_ALL" value="en_US.UTF-8"/>
         <env name="LC_CTYPE" value="en_US.UTF-8"/>
     </node>
+    <node name="pwm_publish_test_node" pkg="pub_sensor_test" type="pwm_publish_test" output="screen"/>
+</group>    
 </launch>
