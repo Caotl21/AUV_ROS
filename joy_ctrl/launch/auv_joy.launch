@@ -1,0 +1,7 @@
+<launch>
+    <arg name="robot_simulation" default="stonefish_sim" doc="robot_simulation type [turtlesim, turtlebot]"/>
+    <node name="joy_node" pkg="joy" type="joy_node" output="screen" respawn="false"/>
+    <param name="robot" value="bluerov2" type="str"/>  
+    <node name="joy_cpp" pkg="joy_ctrl" type="auv_joy" output="screen">
+    </node>
+</launch>

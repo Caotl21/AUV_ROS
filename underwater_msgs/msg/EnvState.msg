@@ -1,0 +1,4 @@
+Header header
+float32 water_temp
+float32 internal_temp
+float32 internal_humidity

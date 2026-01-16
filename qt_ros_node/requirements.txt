@@ -1,0 +1,15 @@
+# ===== 基础依赖 =====
+numpy>=1.21.0
+scipy>=1.7.0
+opencv-python>=4.5.0
+matplotlib>=3.4.0
+pyyaml>=6.0
+loguru>=0.7.0
+
+# ===== GUI框架 =====
+PyQt5>=5.15.0
+PyQt5-sip>=12.11.0
+pyqtgraph>=0.13.0
+
+# ===== ROS相关 =====
+ros-numpy>=0.0.4
