@@ -18,7 +18,11 @@ int main(int argc, char** argv) {
         }
         
         ROS_INFO("水下机器人串口通信节点运行中...");
-        ros::spin();
+
+        // 改为异步spinner以支持多线程回调
+        ros::AsyncSpinner spinner(0);
+        spinner.start();
+        ros::waitForShutdown();
         
     } catch (const std::exception& e) {
         ROS_ERROR("Exception in underwater serial communication node: %s", e.what());

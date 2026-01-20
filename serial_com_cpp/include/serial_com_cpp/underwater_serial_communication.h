@@ -18,6 +18,7 @@
 #include <vector>
 #include <thread>
 #include <atomic>
+#include <mutex>
 
 namespace underwater_serial {
 
@@ -54,13 +55,21 @@ private:
     ros::Publisher depth_pub_;
     ros::Publisher battery_pub_;
 
-
-    
     // 串口相关
     std::unique_ptr<serial::Serial> serial_port_;
     std::string port_;
     int baudrate_;
     double timeout_;
+
+    // 定时器
+    ros::Timer timer_;
+
+    // 数据缓存与线程安全
+    std::vector<int16_t> thruster_pwm_values_;
+    std::vector<int16_t> servo_pwm_values_;
+    std::vector<int16_t> light_pwm_values_;
+    std::mutex thruster_mutex_;
+    std::mutex servo_mutex_;
     
     // 协议定义
     static const uint8_t START_BYTE_1 = 0xAA;
@@ -95,6 +104,7 @@ private:
     bool sendThrusterData(const std::vector<int16_t>& pwm_values);
     bool sendServoData(const std::vector<int16_t>& pwm_values);
     bool sendLightData(const std::vector<int16_t>& pwm_values);
+    bool sendControlData(const std::vector<int16_t>& thruster_values, const std::vector<int16_t>& servo_values);
     
     // 接收处理
     void receiveLoop();
@@ -109,6 +119,9 @@ private:
     void thrusterCallback(const sensor_msgs::JointState::ConstPtr& msg);
     void servoCallback(const sensor_msgs::JointState::ConstPtr& msg);
     void lightCallback(const underwater_msgs::LightPWM::ConstPtr& msg);
+
+    // 定时器回调
+    void timerCallback(const ros::TimerEvent& event);
 };
 
 } // namespace underwater_serial
