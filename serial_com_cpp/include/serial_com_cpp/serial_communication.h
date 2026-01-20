@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <mutex>
 
 namespace serial_com_cpp {
 
@@ -35,6 +36,9 @@ private:
     std::vector<uint8_t> stringToBytes(const std::string& data);
     std::string bytesToHexString(const std::vector<uint8_t>& bytes);
     int bytesToDecimal(const std::vector<uint8_t>& bytes);
+
+    std::mutex data_mutex;   // 互斥锁
+    ros::Timer timer;
     
 public:
     SerialCommunication();

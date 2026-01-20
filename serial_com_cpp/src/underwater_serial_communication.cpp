@@ -2,6 +2,8 @@
 #include <sstream>
 #include <iomanip>
 
+#define DEFAULT_PWM 1500
+
 namespace underwater_serial {
 
 // 在 .cpp 文件末尾添加以下定义
@@ -27,6 +29,10 @@ UnderwaterSerialCommunication::UnderwaterSerialCommunication()
         ROS_ERROR("Failed to initialize serial port");
         return;
     }
+
+    thruster_pwm_values_.resize(6, DEFAULT_PWM);
+    servo_pwm_values_.resize(2, DEFAULT_PWM);
+    light_pwm_values_.resize(2, DEFAULT_PWM);
     
     // 创建订阅者和发布者
     thruster_sub_ = nh_.subscribe("thruster_states", 10, 
@@ -43,6 +49,9 @@ UnderwaterSerialCommunication::UnderwaterSerialCommunication()
     env_state_pub_ = nh_.advertise<underwater_msgs::EnvState>("environment_state", 10);
     battery_pub_ = nh_.advertise<underwater_msgs::BatteryState>("battery_state", 10);
     
+    // 创建定时器 50Hz发送一次控制信号
+    timer_ = nh_.createTimer(ros::Duration(0.02), &UnderwaterSerialCommunication::timerCallback, this);
+
     // 重置状态机
     resetStateMachine();
     
@@ -125,6 +134,66 @@ std::vector<uint8_t> UnderwaterSerialCommunication::encodeData(uint8_t data_type
     frame.push_back(END_BYTE_2);
     
     return frame;
+}
+
+void UnderwaterSerialCommunication::timerCallback(const ros::TimerEvent& event){
+    std::vector<int16_t> temp_thruster_values(6);
+    std::vector<int16_t> temp_servo_values(2);
+    
+    {
+        std::lock_guard<std::mutex> lock1(thruster_mutex_);
+        temp_thruster_values = thruster_pwm_values_;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock2(servo_mutex_);
+        temp_servo_values = servo_pwm_values_;
+    }
+
+
+    sendControlData(temp_thruster_values, temp_servo_values);
+}
+
+bool UnderwaterSerialCommunication::sendControlData(const std::vector<int16_t>& thruster_values,
+                                                   const std::vector<int16_t>& servo_values){
+    if (!isConnected()) {
+        ROS_WARN("串口未连接，无法发送数据");
+        return false;
+    }
+
+    try{
+        std::vector<uint8_t> payload;
+
+        for(size_t i = 0; i < thruster_values.size(); i++) {
+            int16_t pwm = std::max(static_cast<int16_t>(-32768), 
+                                  std::min(static_cast<int16_t>(32767), thruster_values[i]));
+            
+            // 大端序打包
+            uint16_t unsigned_pwm = static_cast<uint16_t>(pwm);
+            payload.push_back((unsigned_pwm >> 8) & 0xFF);  // 高字节
+            payload.push_back(unsigned_pwm & 0xFF);         // 低字节
+        }
+
+        for(size_t i = 0; i < servo_values.size(); i++) {
+            int16_t pwm = std::max(static_cast<int16_t>(-32768), 
+                                  std::min(static_cast<int16_t>(32767), servo_values[i]));
+            
+            // 大端序打包
+            uint16_t unsigned_pwm = static_cast<uint16_t>(pwm);
+            payload.push_back((unsigned_pwm >> 8) & 0xFF);  // 高字节
+            payload.push_back(unsigned_pwm & 0xFF);         // 低字节
+        }
+
+        std::vector<uint8_t> frame = encodeData(1, payload);
+
+        serial_port_->write(frame);
+        //ROS_INFO("发送控制数据成功");
+        return true;
+    }
+    catch (const std::exception& e) {
+        ROS_ERROR("发送数据失败: %s", e.what());
+        return false;
+    }
 }
 
 bool UnderwaterSerialCommunication::sendThrusterData(const std::vector<int16_t>& pwm_values) {
@@ -244,7 +313,17 @@ bool UnderwaterSerialCommunication::sendLightData(const std::vector<int16_t>& pw
 }
 
 void UnderwaterSerialCommunication::thrusterCallback(const sensor_msgs::JointState::ConstPtr& msg) {
-    std::vector<int16_t> pwm_values = {msg->effort[0], msg->effort[1], msg->effort[2], msg->effort[3], msg->effort[4], msg->effort[5]};
+    
+    if(msg->effort.size() < 6){
+        ROS_WARN("接收到的推进器指令数量不足6个，忽略该消息");
+        return;
+    }
+    
+    std::lock_guard<std::mutex> lock(thruster_mutex_);
+    for(int i=0;i<6;i++){
+        thruster_pwm_values_[i] = msg->effort[i];
+    }
+    
     
     // std::stringstream ss;
     // for (size_t i = 0; i < pwm_values.size(); i++) {
@@ -253,11 +332,11 @@ void UnderwaterSerialCommunication::thrusterCallback(const sensor_msgs::JointSta
     // }
     //ROS_INFO("接收到的推进器PWM指令: [%s]", ss.str().c_str());
     
-    sendThrusterData(pwm_values);
+    //sendThrusterData(pwm_values);
 }
 
 void UnderwaterSerialCommunication::servoCallback(const sensor_msgs::JointState::ConstPtr& msg) {
-    std::vector<int16_t> pwm_values = {msg->effort[0], msg->effort[1]};
+    /*std::vector<int16_t> pwm_values = {msg->effort[0], msg->effort[1]};
 
     std::stringstream ss;
     for (size_t i = 0; i < pwm_values.size(); i++) {
@@ -265,7 +344,17 @@ void UnderwaterSerialCommunication::servoCallback(const sensor_msgs::JointState:
         if (i < pwm_values.size() - 1) ss << ", ";
     }
     ROS_INFO("接收到的舵机PWM指令: [%s]", ss.str().c_str());
-    sendServoData(pwm_values);
+    sendServoData(pwm_values);*/
+
+    if(msg->effort.size() < 2){
+        ROS_WARN("接收到的舵机指令数量不足2个，忽略该消息");
+        return;
+    }
+    
+    std::lock_guard<std::mutex> lock(servo_mutex_);
+    for(int i=0;i<2;i++){
+        servo_pwm_values_[i] = msg->effort[i];
+    }
 }
 
 void UnderwaterSerialCommunication::lightCallback(const underwater_msgs::LightPWM::ConstPtr& msg) {
@@ -290,7 +379,7 @@ void UnderwaterSerialCommunication::close() {
     if (receive_thread_.joinable()) {
         receive_thread_.join();
     }
-    
+
     if (serial_port_ && serial_port_->isOpen()) {
         serial_port_->close();
         ROS_INFO("串口已关闭");
