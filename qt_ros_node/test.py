@@ -401,25 +401,26 @@ class RosNode(QThread):
         self.thruster_values = thrust_values
         self.thruster_arrive_signal.emit()
     
-    def imu1_callback(self, msg):
+    def imu2_callback(self, msg):
         # 提取欧拉角（弧度）
         orientation_q = msg.orientation
         r = SciRotation.from_quat([orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
+        # self.yaw, self.pitch, self.roll = r.as_euler('zyx', degrees=True)
         self.roll, self.pitch, self.yaw = r.as_euler('xyz', degrees=True)
         # 根据线性加速度计算加速度大小：平方和开根号
         self.acceleration = (msg.linear_acceleration.x**2 + msg.linear_acceleration.y**2 + msg.linear_acceleration.z**2)#**0.5
         # 根据角速度计算角速度大小：平方和开根号
         self.angular_velocity = (msg.angular_velocity.x**2 + msg.angular_velocity.y**2 + msg.angular_velocity.z**2)**0.5
         #rospy.loginfo(f"IMU数据到达: Roll={self.roll:.2f}, Pitch={self.pitch:.2f}, Yaw={self.yaw:.2f}")
-        self.imu1_arrive_signal.emit()
+        self.imu2_arrive_signal.emit()
 
-    def imu2_callback(self, msg):
+    def imu1_callback(self, msg):
         # 提取欧拉角（弧度）
         orientation_q = msg.orientation
         r = SciRotation.from_quat([orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
         self.roll2, self.pitch2, self.yaw2 = r.as_euler('xyz', degrees=True)
         #rospy.loginfo(f"IMU2数据到达: Roll={self.roll2:.2f}, Pitch={self.pitch2:.2f}, Yaw={self.yaw2:.2f}")
-        self.imu2_arrive_signal.emit()
+        self.imu1_arrive_signal.emit()
 
     def image_callback(self, msg):
         self.image = image_to_numpy(msg)

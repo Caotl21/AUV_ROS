@@ -121,7 +121,7 @@ include_directories(
 
 ## Declare a C++ library
 add_library(${PROJECT_NAME}_lib
-  src/pwm_publish_test.cpp
+  src/test_pwm_node.cpp
 )
 
 ## Add cmake target dependencies of the library
@@ -133,7 +133,8 @@ add_library(${PROJECT_NAME}_lib
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/pub_sensor_test_node.cpp)
-add_executable(pwm_publish_test src/pwm_publish_test.cpp)
+#add_executable(pwm_publish_test src/pwm_publish_test.cpp)
+add_executable(test_pwm_node src/test_pwm_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -152,7 +153,8 @@ add_executable(pwm_publish_test src/pwm_publish_test.cpp)
 target_link_libraries(${PROJECT_NAME}_lib
   ${catkin_LIBRARIES}
 )
-target_link_libraries(pwm_publish_test ${PROJECT_NAME}_lib ${catkin_LIBRARIES})
+#target_link_libraries(pwm_publish_test ${PROJECT_NAME}_lib ${catkin_LIBRARIES})
+target_link_libraries(test_pwm_node ${PROJECT_NAME}_lib ${catkin_LIBRARIES})
 #############
 ## Install ##
 #############
@@ -187,7 +189,7 @@ target_link_libraries(pwm_publish_test ${PROJECT_NAME}_lib ${catkin_LIBRARIES})
 #   FILES_MATCHING PATTERN "*.h"
 #   PATTERN ".svn" EXCLUDE
 # )
-install(TARGETS pwm_publish_test 
+install(TARGETS test_pwm_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

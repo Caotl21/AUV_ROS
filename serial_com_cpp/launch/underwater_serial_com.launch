@@ -23,6 +23,5 @@
         <env name="LC_ALL" value="en_US.UTF-8"/>
         <env name="LC_CTYPE" value="en_US.UTF-8"/>
     </node>
-    <node name="pwm_publish_test_node" pkg="pub_sensor_test" type="pwm_publish_test" output="screen"/>
 </group>    
 </launch>
