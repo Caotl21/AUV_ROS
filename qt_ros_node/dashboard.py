@@ -145,7 +145,7 @@ class ArtificialHorizonWidget(QWidget):
 
         # 2.2 变换坐标系 (旋转 Roll, 平移 Pitch)
         painter.translate(cx, cy)
-        painter.rotate(-self.roll) 
+        painter.rotate(self.roll) 
         pitch_offset = self.pitch * 1.5 
         painter.translate(0, pitch_offset)
 
@@ -216,7 +216,7 @@ class ArtificialHorizonWidget(QWidget):
         # --- Layer 4: 绘制指示当前 Roll 的指针 (随动) ---
         # 这个指针需要跟随 roll 旋转，指向外圈的刻度
         painter.save()
-        painter.rotate(-self.roll) # 旋转负的 roll 角度
+        painter.rotate(self.roll) # 旋转 roll 角度
         
         # 指针位置：内圆边缘
         pointer_y = -r_inner
