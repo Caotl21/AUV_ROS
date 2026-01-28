@@ -225,6 +225,8 @@ class RosNode(QThread):
         self.depth_subscriber = None
         self.force_toque_subscriber = None
         self.battery_state_subscriber = None
+
+        self.emergency_publisher = None
         
         self.msg = None
         self.image = None
@@ -278,9 +280,11 @@ class RosNode(QThread):
         # 取消之前的订阅
         self.cancel_topics_subscriber()
         
-        # 创建新的订阅者
+        # 创建新的发布者
         self.simulation_publisher = rospy.Publisher(f'/{robot_namespace}/cmd_vel', Twist, queue_size=1)
         self.servo_publihser = rospy.Publisher(f'/{robot_namespace}/servo_states', JointState, queue_size=1)
+        self.emergency_publisher = rospy.Publisher(f'/{self.robot_namespace}/emergency_states', Int8, queue_size=10)
+
         # 创建新的订阅者
         self.simulation_subscriber = rospy.Subscriber(f'/{robot_namespace}/cmd_vel', Twist, callback=self.callback, queue_size=1)
         self.image_subscriber = rospy.Subscriber(f'/{robot_namespace}/camera/image_color', Image_msg, callback=self.image_callback, queue_size=1)
@@ -530,6 +534,13 @@ class Widget(QMainWindow):
         self.record_timer.timeout.connect(self.record_frame) #绑定定时抓帧函数
         self.duration_timer = QTimer()
         self.duration_timer.timeout.connect(self.update_recording_duration)
+
+        #紧急任务相关
+        self.is_emergency = False # 紧急状态标志
+        self.emergency_msg_count = 0    # 紧急消息计数
+        self.emergency_state = 0    # 1表示紧急停止，2表示状态恢复
+        self.emergency_timer = QTimer()
+        self.emergency_timer.timeout.connect(self.emergency_publish_duration)
 
         #电池相关
         self.battery_100 = 4.2 *6  # 100%
@@ -1146,7 +1157,7 @@ class Widget(QMainWindow):
         self.connect_button.clicked.connect(self.connect_to_robot)
         self.btn_take_photo.clicked.connect(self.take_photo)
         self.btn_start_recording.clicked.connect(self.toggle_recording)
-        #self.btn_estop.clicked.connect(self.emergency_stop)
+        self.btn_estop.clicked.connect(self.emergency_process)
 
         self.ros_node.image_arrive_signal.connect(self.show_image)
         self.ros_node.connection_status_signal.connect(self.update_connection_status)
@@ -1382,6 +1393,43 @@ class Widget(QMainWindow):
         self.btn_start_recording.setText("🎬 开始录像")
         rospy.loginfo("录像已保存")
 
+    def emergency_process(self):
+        """紧急停止或恢复状态"""
+        if not self.is_emergency:
+            self.emergency_stop()
+        else:
+            self.emergency_recovery()
+
+    def emergency_stop(self):
+        """发送紧急停止命令"""
+        if not self.ros_node.is_connected:
+            rospy.logwarn("请先连接到机器人！")
+            return
+        self.is_emergency = True    #标识进入紧急状态
+        self.emergency_state = 1  # 1表示紧急停止
+        self.emergency_timer.start(5)    #5ms发送信号
+        self.btn_estop.setText("🟢 状态恢复") #修改UI界面显示
+    
+    def emergency_recovery(self):
+        """发送状态恢复命令"""
+        if not self.ros_node.is_connected:
+            rospy.logwarn("请先连接到机器人！")
+            return
+        self.is_emergency = False    #标识进入正常状态
+        self.emergency_state = 2  # 2表示状态恢复
+        self.emergency_timer.start(5)    #5ms发送信号
+        self.btn_estop.setText("🛑 紧急停止") #修改UI界面显示
+        
+    def emergency_publish_duration(self):
+        """持续发送指令，确保机器人收到"""
+        if self.ros_node.is_connected:
+            self.emergency_msg_count += 1
+            emergency_msg = Int8()
+            emergency_msg.data = self.emergency_state  # 1表示紧急停止，2表示状态恢复
+            self.ros_node.emergency_publisher.publish(emergency_msg)#发送
+            if(self.emergency_msg_count >= 3):   #发送三次后停止
+                self.emergency_timer.stop()
+                self.emergency_msg_count = 0
 
     def show_image(self):
         """显示来自ROS图像话题的图像"""
