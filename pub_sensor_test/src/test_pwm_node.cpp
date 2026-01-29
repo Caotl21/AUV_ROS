@@ -9,6 +9,7 @@
 #include <underwater_msgs/ThrustersPWM.h>
 #include <underwater_msgs/ServoPWM.h>
 #include <underwater_msgs/LightPWM.h>
+#include <std_msgs/Int8.h>
 #include <sstream>
 
 class PWMPublisher
@@ -19,8 +20,9 @@ public:
         ros::NodeHandle nh_;
         thruster_pub = nh_.advertise<sensor_msgs::JointState>("thruster_states", 1500);
         servo_pub = nh_.advertise<sensor_msgs::JointState>("servo_states", 1500);
-
         joint_pub = nh_.advertise<sensor_msgs::JointState>("joint_states", 1500);
+        
+        emergency_sub_ = nh_.subscribe("emergency_states", 10, &PWMPublisher::emergencyCallback, this);
         
         // 初始化推进器消息结构
         thrusters_msg.name.push_back("thruster_1_joint");
@@ -52,42 +54,70 @@ public:
 
     void timerCallback(const ros::TimerEvent&)
     {
-        double current_pwm = thrusters_msg.effort[0];
-        if(current_pwm + thruster_delta >= 1700){
-            thruster_delta = -20;
-        } else if(current_pwm + thruster_delta <= 1300){
-            thruster_delta = 20;
+        if(emergency_state == 0){
+            double current_pwm = thrusters_msg.effort[1];
+            if(current_pwm + thruster_delta >= 1700){
+                thruster_delta = -20;
+            } else if(current_pwm + thruster_delta <= 1300){
+                thruster_delta = 20;
+            }
+            thrusters_msg.header.stamp = ros::Time::now();
+            thrusters_msg.effort[0]=current_pwm + thruster_delta;
+            thrusters_msg.effort[1]=current_pwm + thruster_delta;
+            thrusters_msg.effort[2]=current_pwm + thruster_delta;
+            thrusters_msg.effort[3]=current_pwm + thruster_delta;
+            thrusters_msg.effort[4]=current_pwm + thruster_delta;
+            thrusters_msg.effort[5]=current_pwm + thruster_delta;
+            // 在这里更新并发布推进器消息
+            thruster_pub.publish(thrusters_msg);
+            //更新伺服信息
+            current_pwm = servo_msg.effort[0];
+            if(current_pwm + thruster_delta >= 1700){
+                thruster_delta = -20;
+            } else if(current_pwm + thruster_delta <= 1300){
+                thruster_delta = 20;
+            }
+            servo_msg.header.stamp = ros::Time::now();
+            servo_msg.effort[0]=current_pwm + thruster_delta;
+            servo_msg.effort[1]=current_pwm + thruster_delta;
+            // 在这里更新并发布推进器消息
+            servo_pub.publish(servo_msg);
         }
-        thrusters_msg.header.stamp = ros::Time::now();
-        thrusters_msg.effort[0]=current_pwm + thruster_delta;
-        thrusters_msg.effort[1]=current_pwm + thruster_delta;
-        thrusters_msg.effort[2]=current_pwm + thruster_delta;
-        thrusters_msg.effort[3]=current_pwm + thruster_delta;
-        thrusters_msg.effort[4]=current_pwm + thruster_delta;
-        thrusters_msg.effort[5]=current_pwm + thruster_delta;
-        // 在这里更新并发布推进器消息
-        thruster_pub.publish(thrusters_msg);
+        else{
+            //发布紧急停止消息
+            if(emergency_state == 1)
+            {
+                thrusters_msg.header.stamp = ros::Time::now();
+                thrusters_msg.effort[0] = 0xFFFF;
+            }
+            //发布复位消息
+            if(emergency_state == 2)
+            {
+                thrusters_msg.header.stamp = ros::Time::now();
+                thrusters_msg.effort[0] = 0xEFFF;
+                emergency_state = 0;
+            }
+            thruster_pub.publish(thrusters_msg);
+        }
+    }
 
-        current_pwm = servo_msg.effort[0];
-        if(current_pwm + thruster_delta >= 1700){
-            thruster_delta = -20;
-        } else if(current_pwm + thruster_delta <= 1300){
-            thruster_delta = 20;
-        }
-        servo_msg.header.stamp = ros::Time::now();
-        servo_msg.effort[0]=current_pwm + thruster_delta;
-        servo_msg.effort[1]=current_pwm + thruster_delta;
-        // 在这里更新并发布推进器消息
-        servo_pub.publish(servo_msg);
+    void emergencyCallback(const std_msgs::Int8::ConstPtr& msg)
+    {
+        emergency_state = msg->data;
     }
 
 private:
+    //发布者
     ros::Timer timer_;
     ros::Publisher thruster_pub;
     ros::Publisher servo_pub;
     ros::Publisher joint_pub;
+    //订阅者
+    ros::Subscriber emergency_sub_;
+    //消息等其他变量
     sensor_msgs::JointState thrusters_msg;
     sensor_msgs::JointState servo_msg;
+    int emergency_state=0;
     int thruster_delta=20;
 };
 
